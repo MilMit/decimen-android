@@ -1,0 +1,2 @@
+PASS: Kotlin fountain/protocol core matches JavaScript vectors and round-trip test
+framesNew=86, solved=51/51
