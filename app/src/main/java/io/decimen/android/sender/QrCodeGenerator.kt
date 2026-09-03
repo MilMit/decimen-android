@@ -13,7 +13,7 @@ object QrCodeGenerator {
     private val hints = mapOf(
         EncodeHintType.CHARACTER_SET to StandardCharsets.ISO_8859_1.name(),
         EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.L,
-        EncodeHintType.MARGIN to 1,
+        EncodeHintType.MARGIN to 2,
     )
 
     fun generateQrBitmap(bytes: ByteArray, size: Int = 512): Bitmap {

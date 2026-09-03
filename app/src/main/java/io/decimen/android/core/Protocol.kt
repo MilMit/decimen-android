@@ -88,9 +88,6 @@ object DecimenProtocol {
         if (header.blockLength > MAX_BLOCK_LENGTH || header.totalLength > MAX_PAYLOAD_LENGTH) return null
         if (bytes.size != headerLen + header.blockLength) return null
 
-        val expectedBlocks = maxOf(1, ceil(header.totalLength.toDouble() / header.blockLength).toInt())
-        if (header.blockCount != expectedBlocks) return null
-
         return ParsedFrame(
             header = header,
             block = bytes.copyOfRange(headerLen, bytes.size),

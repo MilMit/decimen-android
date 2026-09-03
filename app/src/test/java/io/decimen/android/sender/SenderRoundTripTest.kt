@@ -164,4 +164,89 @@ class SenderRoundTripTest {
         val decodedBytes = segments!!.first()
         assertArrayEquals("Decoded bytes must match encoded bytes exactly", testBytes, decodedBytes)
     }
+
+    @Test
+    fun rotatedCameraSensorDecodeTest() {
+        val block = ByteArray(300) { (it * 7).toByte() }
+        val header = DecimenProtocol.FrameHeader(
+            version = 3,
+            flags = 0,
+            sessionId = 34567,
+            sequence = 12u,
+            blockCount = 5,
+            blockLength = block.size,
+            totalLength = 1500L,
+            payloadFnv = 88888u,
+        )
+        val frameBytes = DecimenProtocol.packFrame(header, block)
+
+        // Generate QR matrix
+        val writer = com.google.zxing.qrcode.QRCodeWriter()
+        val hints = mapOf(
+            com.google.zxing.EncodeHintType.CHARACTER_SET to StandardCharsets.ISO_8859_1.name(),
+            com.google.zxing.EncodeHintType.ERROR_CORRECTION to com.google.zxing.qrcode.decoder.ErrorCorrectionLevel.L,
+            com.google.zxing.EncodeHintType.MARGIN to 2,
+        )
+        val matrix = writer.encode(String(frameBytes, StandardCharsets.ISO_8859_1), BarcodeFormat.QR_CODE, 400, 400, hints)
+        val w = matrix.width
+        val h = matrix.height
+
+        // Create upright luminance
+        val uprightLuminance = ByteArray(w * h)
+        for (y in 0 until h) {
+            for (x in 0 until w) {
+                uprightLuminance[y * w + x] = if (matrix.get(x, y)) 0.toByte() else 255.toByte()
+            }
+        }
+
+        // Simulate camera sensor producing 90-degree rotated YUV frame
+        // When camera is held in portrait, sensor is 90 deg rotated relative to display
+        val sensorLuminance = ByteArray(w * h)
+        var sIdx = 0
+        for (x in w - 1 downTo 0) {
+            for (y in 0 until h) {
+                sensorLuminance[sIdx++] = uprightLuminance[y * w + x]
+            }
+        }
+
+        // Apply our QrFrameAnalyzer rotation (90 deg clockwise)
+        val correctedLuminance = ByteArray(w * h)
+        var cIdx = 0
+        for (x in 0 until h) {
+            for (y in w - 1 downTo 0) {
+                correctedLuminance[cIdx++] = sensorLuminance[y * h + x]
+            }
+        }
+
+        // Scan with PlanarYUVLuminanceSource
+        val source = com.google.zxing.PlanarYUVLuminanceSource(
+            correctedLuminance,
+            w,
+            h,
+            0,
+            0,
+            w,
+            h,
+            false,
+        )
+        val reader = MultiFormatReader().apply {
+            setHints(
+                mapOf(
+                    DecodeHintType.POSSIBLE_FORMATS to listOf(BarcodeFormat.QR_CODE),
+                    DecodeHintType.TRY_HARDER to true,
+                    DecodeHintType.CHARACTER_SET to StandardCharsets.ISO_8859_1.name(),
+                )
+            )
+        }
+        val result = reader.decodeWithState(BinaryBitmap(com.google.zxing.common.GlobalHistogramBinarizer(source)))
+        assertNotNull("Corrected sensor frame must decode successfully", result)
+
+        val textBytes = result.text.toByteArray(StandardCharsets.ISO_8859_1)
+        val parsed = DecimenProtocol.parseFrame(textBytes)
+        assertNotNull("Decoded frame must parse cleanly", parsed)
+        assertEquals(3, parsed!!.header.version)
+        assertEquals(34567, parsed.header.sessionId)
+        assertEquals(12u, parsed.header.sequence)
+        assertArrayEquals("Payload block must match original block", block, parsed.block)
+    }
 }

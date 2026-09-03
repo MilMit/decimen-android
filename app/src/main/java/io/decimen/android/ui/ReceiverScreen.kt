@@ -274,10 +274,18 @@ private fun ScannerCorners(modifier: Modifier = Modifier) {
             cap = StrokeCap.Round,
         )
 
+        // Top-left
         line(Offset(left, top + corner), Offset(left, top))
         line(Offset(left, top), Offset(left + corner, top))
+        // Top-right
         line(Offset(left + side - corner, top), Offset(left + side, top))
         line(Offset(left + side, top), Offset(left + side, top + corner))
+        // Bottom-left
+        line(Offset(left, top + side - corner), Offset(left, top + side))
+        line(Offset(left, top + side), Offset(left + corner, top + side))
+        // Bottom-right
+        line(Offset(left + side - corner, top + side), Offset(left + side, top + side))
+        line(Offset(left + side, top + side - corner), Offset(left + side, top + side))
     }
 }
 
