@@ -1,24 +1,31 @@
-# Decimen Android Receiver
+# Decimen Android (گیرنده و فرستنده)
 
-نسخه‌ی Native اندروید برای دریافت فایل از جریان QR متحرک پروژه‌ی
+نسخه‌ی Native اندروید برای انتقال و دریافت دوطرفه‌ی فایل و متن از طریق جریان QR متحرک (کدهای فواره‌ای LT) بر اساس پروژه‌ی
 `decimen-optical-transfer`.
 
-## وضعیت نسخه 0.1
+## قابلیت‌های نسخه 0.2
 
-این نسخه **گیرنده** است، نه محصول نهایی دوطرفه. قابلیت‌های فعلی:
+این اپلیکیشن شامل هر دو ماژول **گیرنده (Receiver)** و **فرستنده (Sender)** با ناوبری یکپارچه است:
 
-- Kotlin + Jetpack Compose
-- CameraX با `STRATEGY_KEEP_ONLY_LATEST`
-- رمزگشایی QR با ZXing Core
-- استخراج صحیح `BYTE_SEGMENTS` برای داده‌ی باینری
-- پیاده‌سازی سازگار LT Fountain Code
-- ورود به انتقال از وسط جریان، بدون handshake
-- حذف فریم‌های تکراری
-- نمایش پیشرفت بر اساس تعداد فریم‌های جدید
-- بازسازی فایل و بررسی FNV-1a
-- تشخیص اولیه PNG، JPEG، GIF، WebP، PDF، ZIP/APK، MP4، GZip و MP3
-- ذخیره با Storage Access Framework؛ بدون مجوز گسترده حافظه
-- رابط فارسی و راست‌به‌چپ
+### 📥 گیرنده (Receiver):
+- اسکن دوربین با CameraX (`STRATEGY_KEEP_ONLY_LATEST`)
+- رمزگشایی فریم‌های QR با ZXing Core و استخراج دقیق باینری `BYTE_SEGMENTS`
+- بازسازی فایل با کدهای فواره‌ای Luby Transform (LT Fountain Code)
+- امکان پیوستن به استریم از وسط انتقال بدون نیاز به Handshake یا شبکه
+- حذف خودکار فریم‌های تکراری و نمایش زنده درصد پیشرفت
+- بازسازی و اعتبارسنجی یکپارچگی داده با FNV-1a
+- تشخیص نوع بیش از ۱۰ پسوند فایل (PNG, JPEG, PDF, ZIP, APK, MP4, ...)
+- ذخیره مستقیم با Storage Access Framework بدون مجوزهای حساس
+
+### 📤 فرستنده (Sender):
+- امکان ارسال انواع **فایل** (از طریق فایل‌پیکر سیستم) یا **متن کوتاه (Text snippet)**
+- قطعه‌بندی و انکود بلادرنگ با `LTEncoder` بر پایه فرمت پروتکل Decimen v1
+- تولید فریم‌های متحرک QR با فواصل زمانی دقیق بر اساس FPS تنظیمی (۵ تا ۳۰ فریم/ثانیه)
+- قابلیت تنظیم اندازه بلوک (تراکم QR) از ۵۰۰ بایت تا ۱۴۶۵ بایت
+- پشتیبانی از حالت تمام‌صفحه (Fullscreen) جهت بالاترین کیفیت وضوح برای دوربین
+- فعال‌سازی خودکار روشن ماندن صفحه (Keep Screen On) هنگام استریم
+- آمار زنده: شماره توالی فریم، تعداد کل بلوک‌ها (K)، حجم داده و زمان گذشته
+- رابط کاربری مدرن با Jetpack Compose با پشتیبانی کامل از تم تیره و راست‌به‌چپ (RTL)
 
 ## محدودیت‌های عمدی
 
@@ -80,14 +87,15 @@ framesNew=86, solved=51/51
 ```
 
 ## ساختار
-
-```text
-app/src/main/java/io/decimen/android/
-├── camera/      CameraX و ZXing
-├── core/        پروتکل، Fountain Code و تشخیص نوع فایل
-├── receiver/    وضعیت و منطق دریافت
-└── ui/          رابط Compose
-```
+ 
+ ```text
+ app/src/main/java/io/decimen/android/
+ ├── camera/      CameraX و ZXing
+ ├── core/        پروتکل، Fountain Code و تشخیص نوع فایل
+ ├── receiver/    وضعیت و منطق دریافت
++├── sender/      وضعیت و منطق ارسال و استریم QR
+ └── ui/          رابط Compose (MainScreen, ReceiverScreen, SenderScreen)
+ ```
 
 ## قدم بعدی فنی
 

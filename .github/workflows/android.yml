@@ -41,26 +41,26 @@ jobs:
       - name: Prepare APK Artifacts
         run: |
           mkdir -p build-apks
-          cp app/build/outputs/apk/debug/app-debug.apk build-apks/decimen-android-v0.1.0-debug.apk
-          cp app/build/outputs/apk/release/app-release.apk build-apks/decimen-android-v0.1.0-release.apk
+          cp app/build/outputs/apk/debug/app-debug.apk build-apks/decimen-android-debug.apk
+          cp app/build/outputs/apk/release/app-release.apk build-apks/decimen-android-release.apk
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
           name: decimen-android-debug
-          path: build-apks/decimen-android-v0.1.0-debug.apk
+          path: build-apks/decimen-android-debug.apk
 
       - name: Upload Release APK
         uses: actions/upload-artifact@v4
         with:
           name: decimen-android-release
-          path: build-apks/decimen-android-v0.1.0-release.apk
+          path: build-apks/decimen-android-release.apk
 
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            build-apks/decimen-android-v0.1.0-release.apk
-            build-apks/decimen-android-v0.1.0-debug.apk
+            build-apks/decimen-android-release.apk
+            build-apks/decimen-android-debug.apk
           generate_release_notes: true

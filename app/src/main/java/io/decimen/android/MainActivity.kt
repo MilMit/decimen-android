@@ -6,8 +6,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.decimen.android.receiver.ReceiverViewModel
+import io.decimen.android.sender.SenderViewModel
 import io.decimen.android.ui.DecimenTheme
-import io.decimen.android.ui.ReceiverScreen
+import io.decimen.android.ui.MainScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -16,7 +17,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             DecimenTheme(darkTheme = true) {
                 val receiverViewModel: ReceiverViewModel = viewModel()
-                ReceiverScreen(receiverViewModel)
+                val senderViewModel: SenderViewModel = viewModel()
+                MainScreen(receiverViewModel, senderViewModel)
             }
         }
     }
