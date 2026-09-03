@@ -1,6 +1,7 @@
 package io.decimen.android.ui
 
 import android.app.Activity
+import android.content.Intent
 import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -8,43 +9,12 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,7 +22,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
@@ -60,15 +29,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.decimen.android.receiver.toReadableBytes
+import io.decimen.android.sender.QrLayoutMode
 import io.decimen.android.sender.SenderMode
 import io.decimen.android.sender.SenderUiState
 import io.decimen.android.sender.SenderViewModel
+import java.io.File
 
 @Composable
 fun SenderScreen(
     viewModel: SenderViewModel,
+    isEnglish: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -90,7 +63,9 @@ fun SenderScreen(
         uri?.let { viewModel.onFileSelected(context, it) }
     }
 
-    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+    val layoutDirection = if (isEnglish) LayoutDirection.Ltr else LayoutDirection.Rtl
+
+    CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
         Column(
             modifier = modifier
                 .fillMaxSize()
@@ -99,14 +74,7 @@ fun SenderScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text(
-                text = "فرستنده کدهای QR متحرک",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground,
-            )
-
-            // Mode Selector: File vs Text
+            // Mode Selection Tab (File / Text)
             TabRow(
                 selectedTabIndex = if (state.mode == SenderMode.FILE) 0 else 1,
                 containerColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -116,16 +84,16 @@ fun SenderScreen(
                 Tab(
                     selected = state.mode == SenderMode.FILE,
                     onClick = { viewModel.setMode(SenderMode.FILE) },
-                    text = { Text("📁 ارسال فایل") },
+                    text = { Text(if (isEnglish) "📁 File" else "📁 فایل") },
                 )
                 Tab(
                     selected = state.mode == SenderMode.TEXT,
                     onClick = { viewModel.setMode(SenderMode.TEXT) },
-                    text = { Text("📝 متن کوتاه") },
+                    text = { Text(if (isEnglish) "📝 Text" else "📝 متن") },
                 )
             }
 
-            // Payload Selection Card
+            // Input Selection Card
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 shape = RoundedCornerShape(16.dp),
@@ -137,33 +105,63 @@ fun SenderScreen(
                             onClick = { filePicker.launch("*/*") },
                             modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Text(if (state.payloadName.isEmpty()) "انتخاب فایل از حافظه" else "تغییر فایل انتخابی")
-                        }
-                        if (state.payloadName.isNotEmpty()) {
                             Text(
-                                text = "نام: ${state.payloadName}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            Text(
-                                text = "حجم: ${state.payloadSize.toLong().toReadableBytes()}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                if (state.payloadName.isEmpty())
+                                    (if (isEnglish) "Choose File from Storage" else "انتخاب فایل از حافظه")
+                                else
+                                    (if (isEnglish) "Change File" else "تغییر فایل انتخابی")
                             )
                         }
                     } else {
                         OutlinedTextField(
                             value = state.textContent,
                             onValueChange = { viewModel.setTextContent(it) },
-                            label = { Text("متن یا پیام را اینجا وارد کنید...") },
+                            label = { Text(if (isEnglish) "Enter text or snippet..." else "متن یا پیام را اینجا وارد کنید...") },
                             modifier = Modifier.fillMaxWidth(),
                             maxLines = 5,
                         )
-                        if (state.payloadSize > 0) {
+                    }
+
+                    // Metadata preview (DCF2)
+                    if (state.payloadName.isNotEmpty()) {
+                        Divider(modifier = Modifier.padding(vertical = 4.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text(
-                                text = "حجم متن: ${state.payloadSize.toLong().toReadableBytes()}",
+                                text = "${if (isEnglish) "Name" else "نام"}: ${state.payloadName}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            if (state.isCompressed) {
+                                SuggestionChip(
+                                    onClick = {},
+                                    label = { Text("GZIP", fontSize = 11.sp) },
+                                    colors = SuggestionChipDefaults.suggestionChipColors(
+                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                        labelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                )
+                            }
+                        }
+
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(
+                                text = "${if (isEnglish) "Size" else "حجم"}: ${state.originalSize.toLong().toReadableBytes()}" +
+                                        (if (state.isCompressed) " → ${state.transmittedSize.toLong().toReadableBytes()}" else ""),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                text = state.mimeType,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+
+                        state.sha256Hex?.let { sha ->
+                            Text(
+                                text = "SHA-256: ${sha.take(16)}...",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.outline,
                             )
                         }
                     }
@@ -178,7 +176,7 @@ fun SenderScreen(
                 }
             }
 
-            // QR Code Stream Display
+            // QR Code Stream Display Card
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 shape = RoundedCornerShape(16.dp),
@@ -191,26 +189,89 @@ fun SenderScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    val bitmap = state.currentBitmap
-                    if (bitmap != null) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(0.85f)
-                                .aspectRatio(1f)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color.White)
-                                .padding(8.dp)
-                                .clickable { isFullscreen = true },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Image(
-                                bitmap = bitmap.asImageBitmap(),
-                                contentDescription = "QR Frame",
-                                modifier = Modifier.fillMaxSize(),
-                            )
+                    val bitmaps = state.currentBitmaps
+                    if (bitmaps.isNotEmpty()) {
+                        when (state.layoutMode) {
+                            QrLayoutMode.SINGLE -> {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(0.85f)
+                                        .aspectRatio(1f)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(Color.White)
+                                        .padding(8.dp)
+                                        .clickable { isFullscreen = true },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Image(
+                                        bitmap = bitmaps[0].asImageBitmap(),
+                                        contentDescription = "QR Frame",
+                                        modifier = Modifier.fillMaxSize(),
+                                    )
+                                }
+                            }
+                            QrLayoutMode.DUAL -> {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { isFullscreen = true },
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    for (bm in bitmaps) {
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .aspectRatio(1f)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(Color.White)
+                                                .padding(4.dp)
+                                        ) {
+                                            Image(bitmap = bm.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxSize())
+                                        }
+                                    }
+                                }
+                            }
+                            QrLayoutMode.QUAD -> {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { isFullscreen = true },
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        for (bm in bitmaps.take(2)) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .aspectRatio(1f)
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(Color.White)
+                                                    .padding(4.dp)
+                                            ) {
+                                                Image(bitmap = bm.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxSize())
+                                            }
+                                        }
+                                    }
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        for (bm in bitmaps.drop(2).take(2)) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .aspectRatio(1f)
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(Color.White)
+                                                    .padding(4.dp)
+                                            ) {
+                                                Image(bitmap = bm.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxSize())
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
+
                         Text(
-                            text = "برای حالت تمام‌صفحه روی QR ضربه بزنید",
+                            text = if (isEnglish) "Tap QR for fullscreen" else "برای حالت تمام‌صفحه روی کد ضربه بزنید",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -224,10 +285,13 @@ fun SenderScreen(
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
-                                text = if (state.payloadSize > 0) "برای شروع استریم، دکمه زیر را لمس کنید" else "فایل یا متن را انتخاب کنید",
+                                text = if (state.payloadName.isEmpty())
+                                    (if (isEnglish) "Select file or text first" else "ابتدا فایل یا متن را مشخص کنید")
+                                else
+                                    (if (isEnglish) "Press Start to stream" else "دکمه «شروع ارسال» را بزنید"),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 style = MaterialTheme.typography.bodyMedium,
                                 textAlign = TextAlign.Center,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(16.dp),
                             )
                         }
@@ -241,10 +305,10 @@ fun SenderScreen(
                         if (!state.isStreaming) {
                             Button(
                                 onClick = { viewModel.startStreaming() },
-                                enabled = state.payloadSize > 0,
                                 modifier = Modifier.weight(1f),
+                                enabled = state.payloadName.isNotEmpty(),
                             ) {
-                                Text("شروع استریم QR")
+                                Text(if (isEnglish) "Start Streaming" else "شروع ارسال")
                             }
                         } else {
                             if (state.isPaused) {
@@ -252,74 +316,72 @@ fun SenderScreen(
                                     onClick = { viewModel.resumeStreaming() },
                                     modifier = Modifier.weight(1f),
                                 ) {
-                                    Text("ادامه")
+                                    Text(if (isEnglish) "Resume" else "ادامه")
                                 }
                             } else {
                                 OutlinedButton(
                                     onClick = { viewModel.pauseStreaming() },
                                     modifier = Modifier.weight(1f),
                                 ) {
-                                    Text("توقف موقت")
+                                    Text(if (isEnglish) "Pause" else "توقف موقت")
                                 }
                             }
-
                             Button(
                                 onClick = { viewModel.stopStreaming() },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                                 modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                             ) {
-                                Text("توقف انتقال")
+                                Text(if (isEnglish) "Stop" else "پایان")
                             }
                         }
                     }
                 }
             }
 
-            // Real-Time Stats Card
-            if (state.isStreaming || state.blockCount > 0) {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            text = "وضعیت استریم",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            StatItem("فریم ارسالی", "#${state.currentSequence}")
-                            StatItem("بلوک‌های فواره (K)", "${state.blockCount}")
-                            StatItem("زمان گذشته", "${state.elapsedSeconds} ثانیه")
-                        }
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            StatItem("Session ID", state.sessionId.toString(16).uppercase().padStart(4, '0'))
-                            StatItem("نرخ فریم", "${state.targetFps} FPS")
-                            StatItem("حجم بلوک", "${state.blockLength} بایت")
-                        }
-                    }
-                }
-            }
-
-            // Tuning Settings Card
+            // Stream Settings & Multi-code Layout Card
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Text(
-                        text = "تنظیمات سرعت و تراکم",
+                        text = if (isEnglish) "Stream Settings" else "تنظیمات ارسال",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                     )
 
-                    // Target FPS Slider
+                    // Multi-code Layout Selector
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = if (isEnglish) "Grid Layout (Multiple QRs)" else "چیدمان همزمان کدهای QR",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            QrLayoutMode.values().forEach { mode ->
+                                FilterChip(
+                                    selected = state.layoutMode == mode,
+                                    onClick = { viewModel.setLayoutMode(mode) },
+                                    label = { Text(if (isEnglish) mode.labelEn else mode.labelFa, fontSize = 12.sp) },
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                        }
+                    }
+
+                    // FPS Slider
                     Column {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("سرعت پخش (FPS):", style = MaterialTheme.typography.bodyMedium)
-                            Text("${state.targetFps} فریم/ثانیه", fontWeight = FontWeight.Bold)
+                            Text(text = if (isEnglish) "Target FPS" else "سرعت نمایش (FPS)")
+                            Text(
+                                text = "${state.targetFps} fps",
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
                         }
                         Slider(
                             value = state.targetFps.toFloat(),
@@ -329,57 +391,121 @@ fun SenderScreen(
                         )
                     }
 
-                    // Block Size Selection
-                    Text("حجم داده در هر فریم QR (تراکم):", style = MaterialTheme.typography.bodyMedium)
-                    Row(
+                    // Block Size Chips
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = if (isEnglish) "Block Size (QR Density)" else "حجم هر بلوک (تراکم QR)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            val options = listOf(500, 750, 1000, 1465)
+                            options.forEach { size ->
+                                FilterChip(
+                                    selected = state.blockLength == size,
+                                    onClick = { viewModel.setBlockLength(size) },
+                                    label = { Text("$size B", fontSize = 12.sp) },
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                        }
+                    }
+
+                    // Export Looping Animation Button
+                    Divider()
+                    OutlinedButton(
+                        onClick = {
+                            viewModel.exportLoopingAnimation(context) { path ->
+                                val file = File(path)
+                                val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+                                val intent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "image/gif"
+                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                context.startActivity(Intent.createChooser(intent, if (isEnglish) "Share Animation" else "اشتراک انیمیشن"))
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        enabled = state.payloadName.isNotEmpty() && !state.isExportingGif,
                     ) {
-                        listOf(500 to "سبک (500B)", 750 to "عادی (750B)", 1000 to "فشرده (1KB)", 1465 to "حداکثر (1.4KB)").forEach { (size, label) ->
-                            FilterChip(
-                                selected = state.blockLength == size,
-                                onClick = { viewModel.setBlockLength(size) },
-                                label = { Text(label, fontSize = 11.sp) },
-                            )
+                        if (state.isExportingGif) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(if (isEnglish) "Exporting GIF..." else "در حال ساخت انیمیشن...")
+                        } else {
+                            Text(if (isEnglish) "🎞️ Export Looping GIF" else "🎞️ استخراج انیمیشن لوپ (GIF)")
                         }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
-        }
-
-        // Fullscreen QR Code Dialog
-        if (isFullscreen && state.currentBitmap != null) {
-            Dialog(
-                onDismissRequest = { isFullscreen = false },
-                properties = DialogProperties(usePlatformDefaultWidth = false),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.White)
-                        .clickable { isFullscreen = false }
-                        .padding(16.dp),
-                    contentAlignment = Alignment.Center,
+            // Realtime Stats Card
+            if (state.isStreaming) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Image(
-                        bitmap = state.currentBitmap!!.asImageBitmap(),
-                        contentDescription = "Fullscreen QR",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(1f),
-                    )
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = if (isEnglish) "Realtime Stats" else "آمار زنده استریم",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(text = if (isEnglish) "Sequence:" else "شماره فریم جاری:")
+                            Text(text = "#${state.currentSequence}", fontWeight = FontWeight.Bold)
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(text = if (isEnglish) "Blocks (K):" else "تعداد کل بلوک‌ها (K):")
+                            Text(text = "${state.blockCount}")
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(text = if (isEnglish) "Elapsed Time:" else "زمان سپری‌شده:")
+                            Text(text = "${state.elapsedSeconds} ثانیه")
+                        }
+                    }
                 }
             }
         }
     }
-}
 
-@Composable
-private fun StatItem(label: String, value: String) {
-    Column {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+    // Fullscreen QR Dialog
+    if (isFullscreen && state.currentBitmaps.isNotEmpty()) {
+        Dialog(
+            onDismissRequest = { isFullscreen = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+                    .clickable { isFullscreen = false }
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.96f)
+                        .aspectRatio(1f)
+                        .background(Color.White)
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    val bm = state.currentBitmaps.firstOrNull()
+                    if (bm != null) {
+                        Image(
+                            bitmap = bm.asImageBitmap(),
+                            contentDescription = "Fullscreen QR",
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                }
+            }
+        }
     }
 }

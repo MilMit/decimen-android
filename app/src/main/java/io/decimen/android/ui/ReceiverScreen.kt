@@ -19,14 +19,18 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Divider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -58,7 +62,10 @@ import io.decimen.android.receiver.toReadableBytes
 import java.util.Locale
 
 @Composable
-fun ReceiverScreen(viewModel: ReceiverViewModel) {
+fun ReceiverScreen(
+    viewModel: ReceiverViewModel,
+    isEnglish: Boolean = false,
+) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsStateWithLifecycle()
     var permissionGranted by remember {
@@ -87,29 +94,31 @@ fun ReceiverScreen(viewModel: ReceiverViewModel) {
         if (uri == null) return@rememberLauncherForActivityResult
         val payload = viewModel.payloadForSaving()
         if (payload == null) {
-            viewModel.onSaveFailed("داده‌ای برای ذخیره وجود ندارد")
+            viewModel.onSaveFailed(if (isEnglish) "No payload to save" else "داده‌ای برای ذخیره وجود ندارد")
             return@rememberLauncherForActivityResult
         }
         runCatching {
             context.contentResolver.openOutputStream(uri, "w")?.use { output ->
                 output.write(payload)
                 output.flush()
-            } ?: error("سیستم اجازه نوشتن فایل را نداد")
+            } ?: error(if (isEnglish) "System denied file writing" else "سیستم اجازه نوشتن فایل را نداد")
         }.onSuccess {
             viewModel.onFileSaved(uri.lastPathSegment ?: state.suggestedFileName.orEmpty())
         }.onFailure { error ->
-            viewModel.onSaveFailed(error.message ?: "خطای ناشناخته")
+            viewModel.onSaveFailed(error.message ?: (if (isEnglish) "Unknown error" else "خطای ناشناخته"))
         }
     }
 
-    androidx.compose.runtime.CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+    val layoutDirection = if (isEnglish) LayoutDirection.Ltr else LayoutDirection.Rtl
+
+    androidx.compose.runtime.CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
         Scaffold(containerColor = MaterialTheme.colorScheme.background) { contentPadding ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(contentPadding),
             ) {
-                Header()
+                Header(isEnglish = isEnglish)
                 CameraArea(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -122,6 +131,7 @@ fun ReceiverScreen(viewModel: ReceiverViewModel) {
                 )
                 ReceiverPanel(
                     state = state,
+                    isEnglish = isEnglish,
                     onSave = { state.suggestedFileName?.let(saveLauncher::launch) },
                     onReset = viewModel::reset,
                 )
@@ -131,7 +141,7 @@ fun ReceiverScreen(viewModel: ReceiverViewModel) {
 }
 
 @Composable
-private fun Header() {
+private fun Header(isEnglish: Boolean = false) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -148,13 +158,13 @@ private fun Header() {
                 letterSpacing = 2.sp,
             )
             Text(
-                text = "انتقال نوری فایل — گیرنده اندروید",
+                text = if (isEnglish) "Optical File Receiver" else "انتقال نوری فایل — گیرنده اندروید",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
             )
         }
         Text(
-            text = "v0.1",
+            text = "v0.3.0",
             modifier = Modifier
                 .background(
                     MaterialTheme.colorScheme.surfaceVariant,
@@ -268,26 +278,19 @@ private fun ScannerCorners(modifier: Modifier = Modifier) {
         line(Offset(left, top), Offset(left + corner, top))
         line(Offset(left + side - corner, top), Offset(left + side, top))
         line(Offset(left + side, top), Offset(left + side, top + corner))
-        line(Offset(left, top + side - corner), Offset(left, top + side))
-        line(Offset(left, top + side), Offset(left + corner, top + side))
-        line(Offset(left + side - corner, top + side), Offset(left + side, top + side))
-        line(Offset(left + side, top + side), Offset(left + side, top + side - corner))
-
-        drawRect(
-            color = Color.White.copy(alpha = 0.12f),
-            topLeft = Offset(left, top),
-            size = Size(side, side),
-            style = Stroke(width = 1.dp.toPx()),
-        )
     }
 }
 
 @Composable
 private fun ReceiverPanel(
     state: ReceiverUiState,
+    isEnglish: Boolean,
     onSave: () -> Unit,
     onReset: () -> Unit,
 ) {
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+    var textCopied by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -313,7 +316,7 @@ private fun ReceiverPanel(
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        text = "${(state.progress * 100).toInt()}٪",
+                        text = "${(state.progress * 100).toInt()}%",
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Black,
                     )
@@ -332,26 +335,26 @@ private fun ReceiverPanel(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Metric("فریم جدید", state.framesNew.toString(), Modifier.weight(1f))
-                        Metric("تکراری", state.framesDuplicate.toString(), Modifier.weight(1f))
-                        Metric("حجم", state.totalBytes.toReadableBytes(), Modifier.weight(1f))
+                        Metric(if (isEnglish) "New Frames" else "فریم جدید", state.framesNew.toString(), Modifier.weight(1f))
+                        Metric(if (isEnglish) "Duplicates" else "تکراری", state.framesDuplicate.toString(), Modifier.weight(1f))
+                        Metric(if (isEnglish) "Size" else "حجم", state.totalBytes.toReadableBytes(), Modifier.weight(1f))
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Metric(
-                            "سرعت تخمینی",
+                            if (isEnglish) "Rate" else "سرعت تخمینی",
                             String.format(Locale.US, "%.1f KB/s", state.estimatedRateKbps),
                             Modifier.weight(1f),
                         )
                         Metric(
-                            "زمان",
+                            if (isEnglish) "Time" else "زمان",
                             String.format(Locale.US, "%.1f s", state.elapsedSeconds),
                             Modifier.weight(1f),
                         )
                         Metric(
-                            "بلوک حل‌شده",
+                            if (isEnglish) "Solved" else "بلوک حل‌شده",
                             "${state.solvedBlocks}/${state.blockCount}",
                             Modifier.weight(1f),
                         )
@@ -359,16 +362,96 @@ private fun ReceiverPanel(
                 }
 
                 if (state.phase == ReceiverPhase.COMPLETE) {
-                    Text(
-                        text = "نوع شناسایی‌شده: ${state.detectedType} · هش FNV تأیید شد",
-                        color = MaterialTheme.colorScheme.primary,
-                        fontSize = 13.sp,
-                    )
+                    Divider(modifier = Modifier.padding(vertical = 4.dp))
+
+                    state.previewBitmap?.let { bmp ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(180.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color.Black),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            androidx.compose.foundation.Image(
+                                bitmap = bmp.asImageBitmap(),
+                                contentDescription = "Preview",
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+
+                    state.previewText?.let { txt ->
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = if (isEnglish) "Text Content Preview:" else "پیش‌نمایش محتوای متن:",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    OutlinedButton(
+                                        onClick = {
+                                            clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(txt))
+                                            textCopied = true
+                                        },
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                    ) {
+                                        Text(if (textCopied) (if (isEnglish) "Copied!" else "کپی شد") else (if (isEnglish) "Copy" else "کپی متن"), fontSize = 11.sp)
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = txt,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 6,
+                                )
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "${if (isEnglish) "File" else "فایل"}: ${state.suggestedFileName}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (state.sha256Verified == true) {
+                            Text(
+                                text = "SHA-256 ✓",
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                            )
+                        }
+                        if (state.isCompressed) {
+                            Text(
+                                text = "GZIP",
+                                color = MaterialTheme.colorScheme.secondary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                            )
+                        }
+                    }
+
                     Button(
                         onClick = onSave,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text("ذخیره ${state.suggestedFileName}")
+                        Text(if (isEnglish) "Save ${state.suggestedFileName}" else "ذخیره ${state.suggestedFileName}")
                     }
                 }
 
@@ -385,7 +468,7 @@ private fun ReceiverPanel(
                         onClick = onReset,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text("اسکن انتقال جدید")
+                        Text(if (isEnglish) "Scan Next Transfer" else "اسکن انتقال جدید")
                     }
                 }
             }

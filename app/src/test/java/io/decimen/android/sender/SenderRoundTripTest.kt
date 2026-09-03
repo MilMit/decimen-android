@@ -1,5 +1,6 @@
 package io.decimen.android.sender
 
+import android.graphics.Bitmap
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.BinaryBitmap
 import com.google.zxing.DecodeHintType
@@ -7,6 +8,7 @@ import com.google.zxing.MultiFormatReader
 import com.google.zxing.RGBLuminanceSource
 import com.google.zxing.ResultMetadataType
 import com.google.zxing.common.HybridBinarizer
+import io.decimen.android.core.Dcf2Container
 import io.decimen.android.core.DecimenProtocol
 import io.decimen.android.core.LTDecoder
 import io.decimen.android.core.LTEncoder
@@ -62,8 +64,74 @@ class SenderRoundTripTest {
     }
 
     @Test
+    fun dcf2ContainerPackAndUnpackWithGzipAndSha256() {
+        val originalText = "Decimen Optical Transfer Protocol v3. ".repeat(60) // compressible text
+        val rawBytes = originalText.toByteArray(StandardCharsets.UTF_8)
+        val filename = "my_notes.txt"
+        val mimeType = "text/plain"
+
+        val packed = Dcf2Container.packFile(filename, mimeType, rawBytes)
+        assertTrue("Container should start with DCF2 magic", Dcf2Container.isDcf2(packed.container))
+        assertEquals("Text should be gzip compressed", Dcf2Container.CompressionMode.GZIP, packed.compression)
+        assertTrue("Transmitted size should be smaller than original", packed.transmittedSize < packed.originalSize)
+
+        val unpacked = Dcf2Container.unpackFile(packed.container)
+        assertNotNull("Unpacked file must not be null", unpacked)
+        assertEquals("Filename must match", filename, unpacked!!.name)
+        assertEquals("MIME type must match", mimeType, unpacked.type)
+        assertArrayEquals("Decompressed bytes must match original byte-for-byte", rawBytes, unpacked.bytes)
+        assertEquals("SHA-256 hex must match", packed.sha256Hex, unpacked.sha256Hex)
+    }
+
+    @Test
+    fun wireVersion3AndLegacyVersion1FrameCompatibility() {
+        val block = byteArrayOf(1, 2, 3, 4, 5, 6, 7, 8)
+        val header = DecimenProtocol.FrameHeader(
+            sessionId = 12345,
+            sequence = 42u,
+            blockCount = 1,
+            blockLength = block.size,
+            totalLength = block.size.toLong(),
+            payloadFnv = 9999u,
+            version = 3,
+        )
+
+        // Test wire v3 packing and parsing
+        val v3Bytes = DecimenProtocol.packFrame(header, block)
+        val parsedV3 = DecimenProtocol.parseFrame(v3Bytes)
+        assertNotNull("Wire v3 frame must parse successfully", parsedV3)
+        assertEquals(3, parsedV3!!.header.version)
+        assertEquals(12345, parsedV3.header.sessionId)
+        assertEquals(42u, parsedV3.header.sequence)
+        assertArrayEquals(block, parsedV3.block)
+
+        // Test legacy v1 frame compatibility (20-byte header with magic 0xD1, 0x0C)
+        val v1Bytes = java.nio.ByteBuffer.allocate(20 + block.size)
+            .order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            .apply {
+                put(0xD1.toByte())
+                put(0x0C.toByte())
+                putShort(54321.toShort())
+                putInt(100)
+                putShort(1.toShort())
+                putShort(block.size.toShort())
+                putInt(block.size)
+                putInt(7777)
+                put(block)
+            }
+            .array()
+
+        val parsedV1 = DecimenProtocol.parseFrame(v1Bytes)
+        assertNotNull("Legacy v1 frame must parse successfully", parsedV1)
+        assertEquals(1, parsedV1!!.header.version)
+        assertEquals(54321, parsedV1.header.sessionId)
+        assertEquals(100u, parsedV1.header.sequence)
+        assertArrayEquals(block, parsedV1.block)
+    }
+
+    @Test
     fun zxingByteSegmentRoundTrip() {
-        val testBytes = byteArrayOf(0xD1.toByte(), 0x0C.toByte(), 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08)
+        val testBytes = byteArrayOf(0xD1.toByte(), 0xC3.toByte(), 0x03, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08)
         val content = String(testBytes, StandardCharsets.ISO_8859_1)
 
         val writer = com.google.zxing.qrcode.QRCodeWriter()

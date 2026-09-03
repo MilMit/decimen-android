@@ -1,6 +1,7 @@
 package io.decimen.android.receiver
 
 import androidx.lifecycle.ViewModel
+import io.decimen.android.core.Dcf2Container
 import io.decimen.android.core.DecimenProtocol
 import io.decimen.android.core.FileTypeDetector
 import io.decimen.android.core.LTDecoder
@@ -103,18 +104,73 @@ class ReceiverViewModel : ViewModel() {
         }
 
         completedPayload = payload
+
+        if (Dcf2Container.isDcf2(payload)) {
+            val opticalFile = Dcf2Container.unpackFile(payload)
+            if (opticalFile != null) {
+                completedPayload = opticalFile.bytes
+                val previewBmp = if (opticalFile.type.startsWith("image/")) {
+                    try {
+                        android.graphics.BitmapFactory.decodeByteArray(opticalFile.bytes, 0, opticalFile.bytes.size)
+                    } catch (_: Exception) { null }
+                } else null
+
+                val previewTxt = if (opticalFile.type.startsWith("text/") || opticalFile.name.endsWith(".txt") || opticalFile.name.endsWith(".json")) {
+                    try {
+                        String(opticalFile.bytes, java.nio.charset.StandardCharsets.UTF_8).take(3000)
+                    } catch (_: Exception) { null }
+                } else null
+
+                mutableState.value = mutableState.value.copy(
+                    phase = ReceiverPhase.COMPLETE,
+                    status = "انتقال کامل و صحت SHA-256 تأیید شد",
+                    progress = 1f,
+                    elapsedSeconds = elapsed,
+                    hashVerified = true,
+                    sha256Verified = true,
+                    sha256Hex = opticalFile.sha256Hex,
+                    isCompressed = opticalFile.compression == Dcf2Container.CompressionMode.GZIP,
+                    originalBytesSize = opticalFile.bytes.size.toLong(),
+                    suggestedFileName = opticalFile.name,
+                    mimeType = opticalFile.type,
+                    detectedType = opticalFile.type,
+                    cameraActive = false,
+                    previewBitmap = previewBmp,
+                    previewText = previewTxt,
+                )
+                return
+            }
+        }
+
+        // Fallback for legacy v1 raw payload without DCF2 container
         val type = FileTypeDetector.detect(payload)
         val suggestedName = "decimen-${header.sessionId}.${type.extension}"
+        val previewBmp = if (type.mimeType.startsWith("image/")) {
+            try {
+                android.graphics.BitmapFactory.decodeByteArray(payload, 0, payload.size)
+            } catch (_: Exception) { null }
+        } else null
+
+        val previewTxt = if (type.mimeType.startsWith("text/")) {
+            try {
+                String(payload, java.nio.charset.StandardCharsets.UTF_8).take(3000)
+            } catch (_: Exception) { null }
+        } else null
+
         mutableState.value = mutableState.value.copy(
             phase = ReceiverPhase.COMPLETE,
             status = "انتقال کامل و صحت فایل تأیید شد",
             progress = 1f,
             elapsedSeconds = elapsed,
             hashVerified = true,
+            sha256Verified = null,
             suggestedFileName = suggestedName,
             mimeType = type.mimeType,
             detectedType = type.label,
+            originalBytesSize = payload.size.toLong(),
             cameraActive = false,
+            previewBitmap = previewBmp,
+            previewText = previewTxt,
         )
     }
 

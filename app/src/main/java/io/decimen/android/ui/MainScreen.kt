@@ -1,23 +1,20 @@
 package io.decimen.android.ui
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.decimen.android.receiver.ReceiverViewModel
 import io.decimen.android.sender.SenderViewModel
@@ -27,6 +24,7 @@ enum class AppTab {
     SENDER
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
     receiverViewModel: ReceiverViewModel,
@@ -34,10 +32,42 @@ fun MainScreen(
     modifier: Modifier = Modifier,
 ) {
     var currentTab by rememberSaveable { mutableStateOf(AppTab.RECEIVER) }
+    var isEnglish by rememberSaveable { mutableStateOf(false) }
+    var showShareDialog by rememberSaveable { mutableStateOf(false) }
 
-    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+    val layoutDirection = if (isEnglish) LayoutDirection.Ltr else LayoutDirection.Rtl
+
+    CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
         Scaffold(
             modifier = modifier.fillMaxSize(),
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = if (isEnglish) "Decimen Optical" else "دِسیمن (Decimen)",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    },
+                    actions = {
+                        // Share Web Receiver link button
+                        IconButton(onClick = { showShareDialog = true }) {
+                            Text("🔗", fontSize = 18.sp)
+                        }
+                        // Language switcher button
+                        TextButton(onClick = { isEnglish = !isEnglish }) {
+                            Text(
+                                text = if (isEnglish) "فارسی" else "EN",
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                    ),
+                )
+            },
             bottomBar = {
                 NavigationBar(
                     containerColor = MaterialTheme.colorScheme.surface,
@@ -49,7 +79,7 @@ fun MainScreen(
                         icon = { Text("📥", fontSize = 20.sp) },
                         label = {
                             Text(
-                                "دریافت فایل",
+                                if (isEnglish) "Receive" else "دریافت فایل",
                                 fontWeight = if (currentTab == AppTab.RECEIVER) FontWeight.Bold else FontWeight.Normal,
                             )
                         },
@@ -60,7 +90,7 @@ fun MainScreen(
                         icon = { Text("📤", fontSize = 20.sp) },
                         label = {
                             Text(
-                                "ارسال فایل",
+                                if (isEnglish) "Send" else "ارسال فایل",
                                 fontWeight = if (currentTab == AppTab.SENDER) FontWeight.Bold else FontWeight.Normal,
                             )
                         },
@@ -74,10 +104,17 @@ fun MainScreen(
                     .padding(paddingValues),
             ) {
                 when (currentTab) {
-                    AppTab.RECEIVER -> ReceiverScreen(receiverViewModel)
-                    AppTab.SENDER -> SenderScreen(senderViewModel)
+                    AppTab.RECEIVER -> ReceiverScreen(receiverViewModel, isEnglish = isEnglish)
+                    AppTab.SENDER -> SenderScreen(senderViewModel, isEnglish = isEnglish)
                 }
             }
+        }
+
+        if (showShareDialog) {
+            ShareReceiverDialog(
+                isEnglish = isEnglish,
+                onDismiss = { showShareDialog = false },
+            )
         }
     }
 }
